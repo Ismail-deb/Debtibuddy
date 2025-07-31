@@ -1,4 +1,4 @@
-requirements.txt
+﻿requirements.txt
 Libraries needed to run the DentiBuddy app.
 Install these using: pip install -r requirements.txt
 streamlit
