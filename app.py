@@ -1,4 +1,3 @@
-
 import streamlit as st
 import requests
 import json
@@ -8,6 +7,7 @@ import re
 import os
 from datetime import datetime
 from typing import Dict, Any
+
 # Page configuration
 st.set_page_config(
     page_title="DentiBuddy 🦷",
@@ -15,6 +15,7 @@ st.set_page_config(
     layout="centered",
     initial_sidebar_state="collapsed"
 )
+
 # Custom CSS for professional styling
 st.markdown("""
 <style>
@@ -31,10 +32,12 @@ st.markdown("""
     --danger-border: #EF4444;
     --danger-text: #991B1B;
 }
+
 body {
     background-color: var(--background-color);
     color: var(--text-color);
 }
+
 .main-header {
     text-align: center;
     color: var(--primary-color);
@@ -111,6 +114,7 @@ body {
 }
 </style>
 """, unsafe_allow_html=True)
+
 class DentiBuddy:
     """
     DentiBuddy - A privacy-focused dental AI assistant
@@ -118,9 +122,10 @@ class DentiBuddy:
     
     def __init__(self):
         self.ollama_url = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
-        self.model_name = os.getenv("OLLAMA_MODEL", "deepseek-r1:8b")
-        self.max_response_length = 250
-        self.timeout = 60
+        # Changed to faster Gemma 1B model
+        self.model_name = os.getenv("OLLAMA_MODEL", "gemma:1b")
+        self.max_response_length = 300  # Increased since model is faster
+        self.timeout = 30  # Reduced timeout since model is faster
         
     def generate_session_id(self) -> str:
         """Generate a cryptographically secure hashed session ID for privacy"""
@@ -214,25 +219,24 @@ class DentiBuddy:
         """
         try:
             start_time = time.time()
-            # Enhanced dental prompt for better responses
-            dental_prompt = f"""You are DentiBuddy, a knowledgeable dental health assistant. 
-            Provide helpful, accurate dental guidance.
-            Be professional yet friendly. If serious, recommend seeing a dentist immediately.
-            Focus on practical advice and reassurance when appropriate.
+            # Optimized prompt for Gemma model
+            dental_prompt = f"""You are DentiBuddy, a dental health assistant.
+            Provide helpful, accurate dental guidance in 1-2 short sentences.
+            If serious, recommend seeing a dentist immediately.
             
             Question: {prompt}
             
-            Response:"""
+            Short response:"""
             
             payload = {
                 "model": self.model_name,
                 "prompt": dental_prompt,
                 "stream": True,
                 "options": {
-                    "temperature": 0.7,
-                    "top_p": 0.9,
-                    "num_predict": 128,
-                    "stop": ["Question:"]
+                    "temperature": 0.5,  # Lower for more focused responses
+                    "top_p": 0.85,
+                    "num_predict": 100,   # Reduced token count for speed
+                    "stop": ["Question:", "\n\n"]  # Added newline stop
                 }
             }
             
@@ -245,6 +249,7 @@ class DentiBuddy:
             )
             
             response.raise_for_status() 
+
             answer_parts = []
             for line in response.iter_lines():
                 if line:
@@ -259,11 +264,13 @@ class DentiBuddy:
             answer = "".join(answer_parts).strip()
             answer = self._clean_response(answer)
             
+            # Slightly longer responses allowed since model is faster
             if len(answer) > self.max_response_length:
                 answer = answer[:self.max_response_length]
                 answer = answer.rsplit(' ', 1)[0] + "..."
             
             end_time = time.time()
+
             return {
                 'success': True,
                 'response': answer,
@@ -272,18 +279,19 @@ class DentiBuddy:
             }
                 
         except requests.exceptions.HTTPError as e:
-             if e.response.status_code == 404:
+            if e.response.status_code == 404:
                 return {
                     'success': False,
                     'error': f"Model '{self.model_name}' not found. Try: ollama pull {self.model_name}",
                     'error_type': 'model_not_found'
                 }
-             else:
+            else:
                 return {
                     'success': False,
                     'error': f"Ollama server error (HTTP {e.response.status_code}): {e.response.text}",
                     'error_type': 'server_error'
                 }
+
         except requests.exceptions.ConnectionError:
             return {
                 'success': False,
@@ -320,6 +328,7 @@ class DentiBuddy:
         ]
         
         response = response.strip()
+
         for prefix in prefixes_to_remove:
             if response.lower().startswith(prefix.lower()):
                 response = response[len(prefix):].strip()
@@ -353,6 +362,7 @@ class DentiBuddy:
                 
         except:
             return {'ollama_running': False, 'model_available': False}
+
 def display_emergency_alert(emergency_info: Dict[str, Any]) -> None:
     """Display emergency alert with specific triggers"""
     severity_icons = {
@@ -376,6 +386,7 @@ def display_emergency_alert(emergency_info: Dict[str, Any]) -> None:
         • Don't wait - dental emergencies can be serious!
     </div>
     """, unsafe_allow_html=True)
+
 def display_response(response_data: Dict[str, Any]) -> None:
     """Display AI response with metadata"""
     if response_data['success']:
@@ -403,6 +414,7 @@ def display_response(response_data: Dict[str, Any]) -> None:
         error_title = error_messages.get(error_type, "❌ Error")
         
         st.error(f"{error_title}: {response_data['error']}")
+
 def main():
     """Main application function"""
     
@@ -529,5 +541,6 @@ def main():
         if st.button("🧹 Clear Input", help="Clear the question box"):
             st.session_state.user_input = ""
             st.rerun()
+
 if __name__ == "__main__":
     main()
