@@ -123,7 +123,7 @@ class DentiBuddy:
     def __init__(self):
         self.ollama_url = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
         # Changed to faster Gemma 1B model
-        self.model_name = os.getenv("OLLAMA_MODEL", "gemma:1b")
+        self.model_name = os.getenv("OLLAMA_MODEL", "gemma3:1b")
         self.max_response_length = 300  # Increased since model is faster
         self.timeout = 30  # Reduced timeout since model is faster
         
