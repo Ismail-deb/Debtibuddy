@@ -121,11 +121,11 @@ class DentiBuddy:
     """
     
     def __init__(self):
-        self.ollama_url = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
-        # Changed to faster Gemma 1B model
-        self.model_name = os.getenv("OLLAMA_MODEL", "gemma3:1b")
-        self.max_response_length = 300  # Increased since model is faster
-        self.timeout = 30  # Reduced timeout since model is faster
+        # Use 127.0.0.1 instead of localhost for better reliability
+        self.ollama_url = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434/api/generate")
+        self.model_name = os.getenv("OLLAMA_MODEL", "gemma:1b")
+        self.max_response_length = 300
+        self.timeout = 30
         
     def generate_session_id(self) -> str:
         """Generate a cryptographically secure hashed session ID for privacy"""
@@ -295,7 +295,7 @@ class DentiBuddy:
         except requests.exceptions.ConnectionError:
             return {
                 'success': False,
-                'error': "Cannot connect to Ollama. Make sure it's running: 'ollama serve'",
+                'error': f"Cannot connect to Ollama at {self.ollama_url}. Make sure it's running: 'ollama serve'",
                 'error_type': 'connection_error'
             }
         
@@ -341,12 +341,10 @@ class DentiBuddy:
         return response
     
     def get_model_status(self) -> Dict[str, Any]:
-        """Check if Ollama and the model are available"""
+        """Check if Ollama and the model are available with detailed error info"""
         try:
-            response = requests.get(
-                self.ollama_url.replace('/api/generate', '/api/tags'),
-                timeout=5
-            )
+            status_url = self.ollama_url.replace('/api/generate', '/api/tags')
+            response = requests.get(status_url, timeout=10)  # Increased timeout
             
             if response.status_code == 200:
                 models = response.json().get('models', [])
@@ -355,13 +353,24 @@ class DentiBuddy:
                 return {
                     'ollama_running': True,
                     'model_available': self.model_name in model_names,
-                    'available_models': model_names
+                    'available_models': model_names,
+                    'status_url': status_url
                 }
             else:
-                return {'ollama_running': False, 'model_available': False}
+                return {
+                    'ollama_running': False, 
+                    'model_available': False,
+                    'error': f"HTTP {response.status_code}",
+                    'status_url': status_url
+                }
                 
-        except:
-            return {'ollama_running': False, 'model_available': False}
+        except Exception as e:
+            return {
+                'ollama_running': False,
+                'model_available': False,
+                'error': str(e),
+                'status_url': self.ollama_url.replace('/api/generate', '/api/tags')
+            }
 
 def display_emergency_alert(emergency_info: Dict[str, Any]) -> None:
     """Display emergency alert with specific triggers"""
@@ -407,6 +416,7 @@ def display_response(response_data: Dict[str, Any]) -> None:
             'model_not_found': "🤖 Model Not Found", 
             'timeout_error': "⏱️ Timeout Error",
             'server_error': "🖥️ Server Error",
+            'network_error': "🌐 Network Error",
             'unknown_error': "❓ Unknown Error"
         }
         
@@ -428,8 +438,24 @@ def main():
     st.markdown('<p class="subtitle">Your AI-powered dental health assistant</p>', unsafe_allow_html=True)
     
     status = st.session_state.dentibuddy.get_model_status()
+    
+    # Enhanced error display with troubleshooting steps
     if not status.get('ollama_running'):
-        st.error("🔌 Ollama is not running! Please start it with: `ollama serve`")
+        st.error(f"🔌 Connection failed to Ollama at {status.get('status_url', 'Ollama URL')}")
+        st.error(f"Error detail: {status.get('error', 'Unknown error')}")
+        
+        st.markdown("""
+        <div class="disclaimer">
+            <strong>🛠️ TROUBLESHOOTING STEPS</strong><br><br>
+            1. <strong>Start Ollama</strong>: Open a terminal and run: <code>ollama serve</code><br>
+            2. <strong>Check connection</strong>: Visit <a href="http://127.0.0.1:11434" target="_blank">http://127.0.0.1:11434</a> in your browser<br>
+            3. <strong>Firewall settings</strong>: Ensure port 11434 is allowed through your firewall<br>
+            4. <strong>Environment variable</strong>: Try setting OLLAMA_URL before running:<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;<code>set OLLAMA_URL=http://127.0.0.1:11434/api/generate</code> (Windows)<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;<code>export OLLAMA_URL=http://127.0.0.1:11434/api/generate</code> (Mac/Linux)<br>
+            5. <strong>Restart your computer</strong>: Sometimes fixes network stack issues
+        </div>
+        """, unsafe_allow_html=True)
         st.stop()
     elif not status.get('model_available'):
         available = status.get('available_models', [])
